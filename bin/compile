@@ -26,10 +26,10 @@ install_system_deps() {
     local build_tmpdir=$(mktemp -d)
     mkdir -p $build_tmpdir
 
-    echo "Installing essential Playwright dependencies for Chromium on Heroku-24."
+    echo "Installing minimal Playwright dependencies for Chromium on Heroku-24."
 
-    # Essential Chromium dependencies from npx playwright install-deps chromium --dry-run
-    # Includes only the listed packages to minimize slug size (no extras like gstreamer, libvpx, or non-essential libs)
+    # Minimal Chromium dependencies from npx playwright install-deps chromium --dry-run
+    # Excludes large fonts to reduce slug size; uses fonts-liberation as a minimal font set
     cat << EOF >>$build_tmpdir/Aptfile
 libasound2t64
 libatk-bridge2.0-0t64
@@ -53,22 +53,17 @@ libxfixes3
 libxkbcommon0
 libxrandr2
 xvfb
-fonts-noto-color-emoji
-fonts-unifont
 libfontconfig1
 libfreetype6
 xfonts-cyrillic
 xfonts-scalable
 fonts-liberation
-fonts-ipafont-gothic
-fonts-wqy-zenhei
-fonts-tlwg-loma-otf
-fonts-freefont-ttf
 EOF
 
     local cache_tmpdir=$(mktemp -d)
 
-    HOME=/app $buildpack_tmpdir/bin/compile $build_tmpdir $cache_tmpdir
+    # Use --no-install-recommends to avoid unnecessary dependencies
+    HOME=/app $buildpack_tmpdir/bin/compile $build_tmpdir $cache_tmpdir "--no-install-recommends"
     if [ $? -ne 0 ]; then
         rm -rf $buildpack_tmpdir $build_tmpdir $cache_tmpdir
         error "Could not install dependencies"
@@ -86,8 +81,8 @@ configure_export_env() {
     mkdir -p $BUILD_DIR/.profile.d
     cat << EOF >$BUILD_DIR/.profile.d/001_playwright.sh
 export PLAYWRIGHT_BROWSERS_PATH=0
-# They are not referenced correctly for ffmpeg (retained for potential media needs, though minimized deps may omit some paths)
-export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/app/.apt/usr/lib/x86_64-linux-gnu/pulseaudio/:/app/.apt/lib/x86_64-linux-gnu/
+# Only include necessary LD_LIBRARY_PATH entries
+export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/app/.apt/lib/x86_64-linux-gnu/
 EOF
 
     # Give environment variable to other buildpacks
